@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\ProquintUtil\ProquintUtil.csproj" />
+    <ProjectReference Include="..\ShamirSecretShareSchema\ShamirSecretShareSchema.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="jose-jwt" Version="2.4.0" />
+    <PackageReference Include="Microsoft.Azure.KeyVault.WebKey" Version="3.0.0" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>
