@@ -14,9 +14,15 @@ After the tool is installed just run it with folowing parameters:
 * `-i|--kid` - key identifier
 * `-s|--size` - RSA key size (not implemented, defaults to 2048)
 * `-o|--output` - name of output file. Defaults to `kid.backup`
+* `-t|--test` - test mode - skips share verifications, no key output, no key imported into vault
 
 Example `KeyGeneratorCli --count=5 --quorum=3 --kid=sec.enc` will output 
 the key into `sec.enc.backup` file and will generate 5 shares.
+
+The backup need to be stored separated from shares. Each share should be 
+in possession of different person. 
+
+
 
 ## Install
 ```

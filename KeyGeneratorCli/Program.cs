@@ -12,6 +12,8 @@ namespace KeyGeneratorCli
         static int sOpt = 2048;
         static string oOpt = null;
         static string iOpt = null;
+        static bool   tOpt = false;
+        static string testMode ="";
 
 
         static void processOpts(string[] args)
@@ -22,8 +24,9 @@ namespace KeyGeneratorCli
                 new LongOpt("kid",Argument.Required,null,'i'),
                 new LongOpt("size",Argument.Required,null,'s'),
                 new LongOpt("output",Argument.Required,null,'o'),
+                new LongOpt("test",Argument.No,null,'t'),
             };
-            var opts = new Getopt("KeyGeneratorCli", args, "k:n:i:", longOpts);
+            var opts = new Getopt("KeyGeneratorCli", args, "k:n:i:s:o:t", longOpts);
 
             var c = 0;
             while ((c = opts.getopt()) != -1)
@@ -40,6 +43,10 @@ namespace KeyGeneratorCli
                         iOpt = opts.Optarg; break;
                     case 'o':
                         oOpt = opts.Optarg; break;
+                    case 't':
+                        tOpt = true; 
+                        testMode = "<<!! TEST MODE !! - no permanent changes will be performed>>";
+                        break;
                     case '?':
                     default:
                         //Console.WriteLine("Unkonwn option")
@@ -128,6 +135,38 @@ Press [Enter] when ready.");
                     }
                 }
             }
+
+            Console.Clear();
+            Console.WriteLine(String.Format(@"
+All shares distributed. The key backup will be stored on 
+the disk in a file: {0} 
+
+Press [Enter] to store key backup {1}.
+",oOpt, testMode));
+            Console.ReadLine();
+
+            Console.Clear();
+            Console.WriteLine(String.Format(@"
+            
+The key will be imported into the Azure Key Vault using following parameters:
+* subscription id: {0}
+* keyvalut name  : {1}
+* key id         : {2}
+
+Press [Enter] to proceed {3}.      
+", "NOT YET IMPL", "NOT YET IMPL", iOpt, testMode));
+            Console.ReadLine();
+
+            Console.Clear();
+            Console.WriteLine(String.Format(@"
+All done.
+
+Press [Enter] to finish.
+
+{0}",testMode));
+            Console.ReadLine();
+
+
         }
 
 
@@ -157,12 +196,12 @@ Press [Enter] when done.
 ", idx++, share.n, share.k, iOpt, share.shareIndex, share.shareValue, share.shareHash, share.secretHash));
                     Console.ReadLine();
         }
-        
+
         static bool readVerifyShare(int shareIndex, string shareValue, string shareHash)
         {
-
+            if (tOpt) return true;
             Console.Clear();
-            Console.WriteLine("To verify your record, enter your share information. Confirm rvery etry with [Enter].");
+            Console.WriteLine("To verify your record, enter your share information. Confirm every etry with [Enter].");
             Console.Write("Enter shareIndex (a number):");
             var shareIndexVerify = Console.ReadLine();
             Console.Write("Enter shareValue (cvcvc-cvcvc...):");
