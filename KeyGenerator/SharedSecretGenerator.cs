@@ -32,6 +32,7 @@ namespace KeyGenerator
         public int shareIndex;
         public string shareValue;
         public string shareHash;
+        public string secretHash;
     }
     public static class Base64Url
     {
@@ -84,12 +85,18 @@ namespace KeyGenerator
         public static string computeShareHash(int shareIndex, string shareValue)
         {
             var bytes = Encoding.UTF8.GetBytes(String.Format("{0:x08}:{1}", shareIndex, shareValue).ToLower());
+            return computeBytesHash(bytes);
+        }
+
+        public static string computeBytesHash(byte[] bytes)
+        {
             var hash = SHA256.Create();
             var hashValue = hash.ComputeHash(bytes);
             var hashValuePrefix = new byte[4];
             Array.Copy(hashValue, hashValuePrefix, 4);
             return ProquintUtil.PQ.bytes2quints(hashValuePrefix);
         }
+        
 
         public static Share[] generateSharedSecret(int length, int n, int k)
         {
@@ -109,7 +116,8 @@ namespace KeyGenerator
                     k = k,
                     shareIndex = shareBinary.Key,
                     shareValue = shareValue,
-                    shareHash = computeShareHash(shareBinary.Key, shareValue)
+                    shareHash = computeShareHash(shareBinary.Key, shareValue),
+                    secretHash = computeBytesHash(secret)
                 };
             }
             return shares;
@@ -120,6 +128,7 @@ namespace KeyGenerator
             if (shares == null || shares.Length == 0) throw new Exception("shares must not be null or empty array");
             var n = shares[0].n;
             var k = shares[0].k;
+            var secretHash = shares[0].secretHash;
             if (shares.Length < k) throw new Exception(String.Format("too little shares, at least {0} shares must bu provided", k));
             var s = new Dictionary<int, byte[]>();
             foreach (var share in shares)
@@ -130,10 +139,17 @@ namespace KeyGenerator
                     throw new Exception("shareValue and shareHash can't be null");
                 if (!computeShareHash(share.shareIndex, share.shareValue).Equals(share.shareHash))
                     throw new Exception("inconsistent share hash - typing error?");
+                if (!secretHash.Equals(share.secretHash))
+                    throw new Exception("inconsistent secret hash - typing error?");
+                
                 s.Add(share.shareIndex, ProquintUtil.PQ.quints2bytes(share.shareValue));
             }
             //validations done
-            return Scheme.of(n, k).join(s);
+            var secret = Scheme.of(n, k).join(s); 
+            if (!computeBytesHash(secret).Equals(secretHash))            
+                throw new Exception("failed to validate secret hash - bad share indexes and values entered");
+                
+            return secret;
         }
 
         static string toB64(byte[] b)

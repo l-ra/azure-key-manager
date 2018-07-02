@@ -21,6 +21,7 @@ namespace KeyGeneratorCli
                 new LongOpt("count",Argument.Required,null,'n'),
                 new LongOpt("kid",Argument.Required,null,'i'),
                 new LongOpt("size",Argument.Required,null,'s'),
+                new LongOpt("output",Argument.Required,null,'o'),
             };
             var opts = new Getopt("KeyGeneratorCli", args, "k:n:i:", longOpts);
 
@@ -37,6 +38,8 @@ namespace KeyGeneratorCli
                         sOpt = Int32.Parse(opts.Optarg); break;
                     case 'i':
                         iOpt = opts.Optarg; break;
+                    case 'o':
+                        oOpt = opts.Optarg; break;
                     case '?':
                     default:
                         //Console.WriteLine("Unkonwn option")
@@ -146,17 +149,15 @@ Write down following information:
   * share index (number)     : {4}
   * share value              : {5}
   * share hash               : {6}
+  * secret hash              : {7}
 --------------------------------------------------------------------------
 Press [Enter] when done.
 
 
-", idx++, share.n, share.k, iOpt, share.shareIndex, share.shareValue, share.shareHash));
+", idx++, share.n, share.k, iOpt, share.shareIndex, share.shareValue, share.shareHash, share.secretHash));
                     Console.ReadLine();
-
-
         }
-
-
+        
         static bool readVerifyShare(int shareIndex, string shareValue, string shareHash)
         {
 
