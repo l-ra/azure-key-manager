@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Microsoft.Azure.KeyVault;
 
 
 namespace KeyGeneratorCli
@@ -215,6 +216,7 @@ namespace KeyGeneratorCli
             Console.ReadLine();
             string token=null;
             if (!testModeFlag) token = getToken();
+            Console.WriteLine($"Token:\n{token}");
             displayVaultImportConfirm();
             Console.ReadLine();
             if (!testModeFlag) importKeyToVault(key,token,vaultUrl);
@@ -326,8 +328,25 @@ If the browser failed to open, navigate to:
             var content = new ObjectContent<ImportKeyRequest>(new ImportKeyRequest{key=key},new JsonMediaTypeFormatter());
             var result = new HttpClient().PutAsync(importRequestUrl,content).Result;
             var response = result.Content.ReadAsStringAsync().Result;
-            Console.WriteLine($"Import key result {result.StatusCode} {result.ReasonPhrase}\n{response}");
+            Console.WriteLine($"Import key result {result.StatusCode} {result.ReasonPhrase}\n===\n{response}\n===\n");
         }
+
+        static void importKeyToVault2(JwtRsaKey key, string token, string vaultUrl){
+            var client = new KeyVaultClient(new KeyVaultClient.AuthenticationCallback(async (authority, resource, scope)=>await Task.FromResult(token)));
+            var keyBnd = new Microsoft.Azure.KeyVault.Models.KeyBundle();
+            keyBnd.Key=new Microsoft.Azure.KeyVault.WebKey.JsonWebKey{
+                Kty=key.kty,
+                Kid=key.kid,
+                E = Encoding.UTF8.GetBytes(key.e),
+                P = Encoding.UTF8.GetBytes(key.p),
+                Q = Encoding.UTF8.GetBytes(key.q),
+                QI = Encoding.UTF8.GetBytes(key.qi),
+                DP = Encoding.UTF8.GetBytes(key.dp),
+                DQ = Encoding.UTF8.GetBytes(key.dq)
+            };
+            var result = client.ImportKeyAsync(vaultUrl,key.kid,keyBnd).Result;
+        }
+
 
         static void displayInitialInfo(){
                         Console.WriteLine($@"
