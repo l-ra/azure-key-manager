@@ -35,6 +35,7 @@ in possession of different person.
 
 
 ## Install
+Prerequisites - .net Core 2 installed, `dotnet` command working
 ```
 git clone https://github.com/l-ra/azure-key-manager.git
 cd azure-key-manager
