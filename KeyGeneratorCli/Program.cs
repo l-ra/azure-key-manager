@@ -108,8 +108,9 @@ namespace KeyGeneratorCli
                 new LongOpt("resource",Argument.No,null,'r'),
                 new LongOpt("vaulturl",Argument.No,null,'v'),
                 new LongOpt("skipshareverify",Argument.No,null,'x'),
+                new LongOpt("help",Argument.No,null,'h'),
             };
-            var opts = new Getopt("KeyGeneratorCli", args, "k:n:i:s:o:te:a:u:r:v:xz:", longOpts);
+            var opts = new Getopt("KeyGeneratorCli", args, "k:n:i:s:o:te:a:u:r:v:xz:h", longOpts);
 
             var c = 0;
             while ((c = opts.getopt()) != -1)
@@ -144,6 +145,8 @@ namespace KeyGeneratorCli
                         vaultUrl = opts.Optarg; break;
                     case 'x':
                         skipshareverify = true; break;
+                    case 'h':
+                        displayHelp();break;
                     case '?':
                     default:
                         //Console.WriteLine("Unkonwn option")
@@ -434,6 +437,29 @@ Token acquired, ready to proceed to vault import.
 
 Press [Enter] to continue {testMode}");
         }
+
+
+        static void displayHelp(){
+            Console.WriteLine(@"
+
+* `-n|--count` - total number of shares
+* `-k|--quorum`	- number of shares needed to decrypt the key backup
+* `-i|--kid` - key identifier
+* `-s|--size` - RSA key size (not implemented, defaults to 2048)
+* `-o|--output` - name of output file. Defaults to `kid.backup`
+* `-t|--test` - test mode - skips share verifications, no key output, no key imported into vault
+* `-e|--tenant` - tenant to use for OAuth2 token request
+* `-a|--appid` - appid (client_id) to use for OAuth2 token request
+* `-c|--appsecret` - app secret (client_secret) to use for OAuth2 token request
+* `-u|--redirecturl` - oauth2 redirect url - defuelts to http://localhost:7373
+* `-r|--resource` - oauth2 request resource defaults to https://vault.azure.net
+* `-v|--vaulturl` - the target vault URL, defaults to https://lravault.vault.azure.net/
+* `-x|--skipshareverify` - skips the verification of the shares DANGEROUS for production use, share may be misstyped
+* `-h|--help` - display help
+
+            ");
+        }
+
 
     }
     public class ImportKeyRequest {
