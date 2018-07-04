@@ -16,7 +16,8 @@ After the tool is installed just run it with folowing parameters:
 * `-o|--output` - name of output file. Defaults to `kid.backup`
 * `-t|--test` - test mode - skips share verifications, no key output, no key imported into vault
 * `-e|--tenant` - tenant to use for OAuth2 token request
-* `-a|--appid` - appid to use for OAuth2 token request
+* `-a|--appid` - appid (client_id) to use for OAuth2 token request
+* `-c|--appsecret` - app secret (client_secret) to use for OAuth2 token request
 * `-u|--redirecturl` - oauth2 redirect url - defuelts to http://localhost:7373
 * `-r|--resource` - oauth2 request resource defaults to https://vault.azure.net
 * `-v|--vaulturl` - the target vault URL, defaults to https://lravault.vault.azure.net/

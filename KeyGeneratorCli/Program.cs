@@ -86,6 +86,7 @@ namespace KeyGeneratorCli
 
         static string tenant = "ludekraseklogica.onmicrosoft.com";
         static string appId = "c35c4ab0-2d8a-4e1c-8eab-3633c82c9f52";
+        static string appSecret = null;
         static string redirectUrl = "http://localhost:7373";
         static string resourceId = "https://vault.azure.net/";
         static string vaultUrl = "https://lravault.vault.azure.net/";
@@ -102,12 +103,13 @@ namespace KeyGeneratorCli
                 new LongOpt("test",Argument.No,null,'t'),
                 new LongOpt("tenant",Argument.No,null,'e'),
                 new LongOpt("appid",Argument.No,null,'a'),
+                new LongOpt("appsecret",Argument.No,null,'z'),
                 new LongOpt("redirecturl",Argument.No,null,'u'),
                 new LongOpt("resource",Argument.No,null,'r'),
                 new LongOpt("vaulturl",Argument.No,null,'v'),
                 new LongOpt("skipshareverify",Argument.No,null,'x'),
             };
-            var opts = new Getopt("KeyGeneratorCli", args, "k:n:i:s:o:te:a:u:r:v:x", longOpts);
+            var opts = new Getopt("KeyGeneratorCli", args, "k:n:i:s:o:te:a:u:r:v:xz:", longOpts);
 
             var c = 0;
             while ((c = opts.getopt()) != -1)
@@ -132,6 +134,8 @@ namespace KeyGeneratorCli
                         tenant = opts.Optarg; break;
                     case 'a':
                         appId = opts.Optarg; break;
+                    case 'z':
+                        appSecret = opts.Optarg; break;
                     case 'u':
                         redirectUrl = opts.Optarg; break;
                     case 'r':
@@ -304,16 +308,16 @@ If the browser failed to open, navigate to:
             Startup.startWeb(redirectUrl);
             OpenBrowser(loginUrl);
             var code = Startup.Oauth2Code.Task.Result;
-            var postContent = new FormUrlEncodedContent(
-                            new[]{
+            var parameters = new List<KeyValuePair<string,string>>();
+            parameters.AddRange(new []{
                                  new KeyValuePair<string,string>("grant_type","authorization_code"),
                                  new KeyValuePair<string,string>("client_id",appId),
                                  new KeyValuePair<string,string>("code",code),
                                  new KeyValuePair<string,string>("redirect_uri",redirectUrl),
                                  new KeyValuePair<string,string>("resource",resourceId)
-                            }
-                        );
-
+                            });
+            if (!String.IsNullOrEmpty(appSecret)) parameters.Add( new KeyValuePair<string,string>("client_secret",appSecret));
+            var postContent = new FormUrlEncodedContent(parameters);
             var result = new HttpClient().PostAsync(
                 $"https://login.microsoftonline.com/{tenant}/oauth2/token",
                 postContent).Result;
