@@ -9,11 +9,15 @@ and create secure backup. The KeyGeneratorCli tool shall be used on a secure com
 a clean installation. .NET Core 2 is required.  
 
 After the tool is installed just run it with folowing parameters:
+* `-c|--command` - available commands: 
+  * `generate` - will generate new key - the default command
+  * `recover` - will recover from encrypted key backup (see --backup)
 * `-n|--count` - total number of shares
 * `-k|--quorum`	- number of shares needed to decrypt the key backup
 * `-i|--kid` - key identifier
 * `-s|--size` - RSA key size (not implemented, defaults to 2048)
 * `-o|--output` - name of output file. Defaults to `kid.backup`
+* `-b|--backup` - name of input file containing key backup. Defaults to `kid.backup`
 * `-t|--test` - test mode - skips share verifications, no key output, no key imported into vault
 * `-e|--tenant` - tenant to use for OAuth2 token request
 * `-a|--appid` - appid (client_id) to use for OAuth2 token request
@@ -21,7 +25,9 @@ After the tool is installed just run it with folowing parameters:
 * `-u|--redirecturl` - oauth2 redirect url - defuelts to http://localhost:7373
 * `-r|--resource` - oauth2 request resource defaults to https://vault.azure.net
 * `-v|--vaulturl` - the target vault URL, defaults to https://lravault.vault.azure.net/
-* `-x|--skipshareverify` - skips the verification of the shares DANGEROUS for production use, share may be misstyped,
+* `-x|--skipshareverify` - skips the verification of the shares DANGEROUS for production use, share may be misstyped
+* `-h|--help` - display help
+
 
 
 Example `KeyGeneratorCli --count=5 --quorum=3 --kid=sec.enc -v https://somevault.vault.azure.net/` will output 

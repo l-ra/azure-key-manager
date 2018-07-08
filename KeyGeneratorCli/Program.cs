@@ -9,6 +9,7 @@ using System.Net.Http;
 using System.Net.Http.Formatting;
 using Gnu.Getopt;
 using System.Text;
+using System.Text.RegularExpressions;
 using KeyGenerator;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
@@ -76,6 +77,10 @@ namespace KeyGeneratorCli
 
     class Program
     {
+        const string proquintPattern = "[bcdfghjklmnpqrstvwxz][aeiouy][bcdfghjklmnpqrstvwxz][aeiouy][bcdfghjklmnpqrstvwxz]-[bcdfghjklmnpqrstvwxz][aeiouy][bcdfghjklmnpqrstvwxz][aeiouy][bcdfghjklmnpqrstvwxz](-[bcdfghjklmnpqrstvwxz][aeiouy][bcdfghjklmnpqrstvwxz][aeiouy][bcdfghjklmnpqrstvwxz]-[bcdfghjklmnpqrstvwxz][aeiouy][bcdfghjklmnpqrstvwxz][aeiouy][bcdfghjklmnpqrstvwxz])*";
+        const string CMD_GENERATE = "generate";
+        const string CMD_RECOVER = "recover";
+        static string[] COMMANDS = new string[]{CMD_GENERATE,CMD_RECOVER};
         static int quorum = -1;
         static int shareCount = -1;
         static int keySize = 2048;
@@ -91,6 +96,8 @@ namespace KeyGeneratorCli
         static string resourceId = "https://vault.azure.net/";
         static string vaultUrl = "https://lravault.vault.azure.net/";
         static bool skipshareverify = false;
+        static string command = CMD_GENERATE;
+        static string backupToRecover;
 
         static void processOpts(string[] args)
         {
@@ -101,16 +108,18 @@ namespace KeyGeneratorCli
                 new LongOpt("size",Argument.Required,null,'s'),
                 new LongOpt("output",Argument.Required,null,'o'),
                 new LongOpt("test",Argument.No,null,'t'),
-                new LongOpt("tenant",Argument.No,null,'e'),
-                new LongOpt("appid",Argument.No,null,'a'),
-                new LongOpt("appsecret",Argument.No,null,'z'),
-                new LongOpt("redirecturl",Argument.No,null,'u'),
-                new LongOpt("resource",Argument.No,null,'r'),
-                new LongOpt("vaulturl",Argument.No,null,'v'),
+                new LongOpt("tenant",Argument.Required,null,'e'),
+                new LongOpt("appid",Argument.Required,null,'a'),
+                new LongOpt("appsecret",Argument.Required,null,'z'),
+                new LongOpt("redirecturl",Argument.Required,null,'u'),
+                new LongOpt("resource",Argument.Required,null,'r'),
+                new LongOpt("vaulturl",Argument.Required,null,'v'),
                 new LongOpt("skipshareverify",Argument.No,null,'x'),
                 new LongOpt("help",Argument.No,null,'h'),
+                new LongOpt("command",Argument.Required,null,'c'),
+                new LongOpt("backup",Argument.Required,null,'b')
             };
-            var opts = new Getopt("KeyGeneratorCli", args, "k:n:i:s:o:te:a:u:r:v:xz:h", longOpts);
+            var opts = new Getopt("KeyGeneratorCli", args, "k:n:i:s:o:te:a:u:r:v:xz:hc:b:", longOpts);
 
             var c = 0;
             while ((c = opts.getopt()) != -1)
@@ -145,6 +154,10 @@ namespace KeyGeneratorCli
                         vaultUrl = opts.Optarg; break;
                     case 'x':
                         skipshareverify = true; break;
+                    case 'c':
+                        command = opts.Optarg; break;
+                    case 'b':
+                        backupToRecover = opts.Optarg; break;
                     case 'h':
                         displayHelp();break;
                     case '?':
@@ -154,6 +167,12 @@ namespace KeyGeneratorCli
                 }
                 //Console.WriteLine(String.Format("c: {0}, arg: {1}, ind {2}",(char) c, opts.Optarg, opts.Optind));
             }
+
+            if ( Array.Find(COMMANDS,validCommand=>validCommand.Equals(command))==null){
+                Console.WriteLine($"Bad command {command}. Allowed commands: [{String.Join(",",COMMANDS)}]");
+                Environment.Exit(1);
+            }
+
             if (quorum == -1 || shareCount == -1)
             {
                 Console.WriteLine("both -k (--quorum) and -n (--count)  must bespecified");
@@ -177,6 +196,10 @@ namespace KeyGeneratorCli
                 output = kid + ".backup";
             }
 
+            if ( backupToRecover == null ){
+                backupToRecover = kid + ".backup";
+            }
+
         }
 
         static void Main(string[] args)
@@ -184,10 +207,23 @@ namespace KeyGeneratorCli
 
             processOpts(args);
 
-            Console.Clear();
-            displayInitialInfo();
-            Console.ReadLine();
+            switch (command){
+                case CMD_GENERATE: doGenerate(); break;
+                case CMD_RECOVER: doRecover(); break;
+            }
 
+        }
+
+
+        static void doGenerate(){
+            if ( File.Exists(output) ){
+                Console.WriteLine("Output exists. Quitting.");
+                Environment.Exit(1);
+            }
+
+            Console.Clear();
+            displayGenerateInitialInfo();
+            Console.ReadLine();
 
             var key = SharedSecretGenerator.genKey(kid);
             var shares = SharedSecretGenerator.generateSharedSecret(32, shareCount, quorum);
@@ -206,7 +242,7 @@ namespace KeyGeneratorCli
                     displayShare(idx++, share);
 
                     // verification
-                    verified = readVerifyShare(share.shareIndex, share.shareValue, share.shareHash);
+                    verified = readVerifyShare(share.shareIndex, share.shareValue, share.shareHash, shareCount, idx);
                     if (!verified){
                         displayInvalidShare();
                     }
@@ -217,7 +253,9 @@ namespace KeyGeneratorCli
             displayStoreKeyStorePrompt();
             Console.ReadLine();
 
-            if (!testModeFlag) File.WriteAllText(output,encryptedKey,Encoding.UTF8);
+            if (!testModeFlag){
+                File.WriteAllText(output,encryptedKey,Encoding.UTF8);
+            } 
             Console.Clear();
             displayAzureVaultPrompt();
             Console.ReadLine();
@@ -233,6 +271,67 @@ namespace KeyGeneratorCli
             Console.Clear();
             displayFinishInfo();
             Console.ReadLine();
+        }
+
+        static void doRecover(){
+            if ( ! File.Exists(backupToRecover) ){
+                Console.WriteLine($"Backup file {backupToRecover} does not exists. Quitting.");
+                Environment.Exit(1);
+            }
+
+            Console.Clear();
+            displayRecoverInitialInfo();
+            Console.ReadLine();
+
+            displayShareHolderInvitation(quorum);
+            Console.ReadLine();
+
+            Share[] shares = new Share[quorum];
+            
+
+            for( var i=0; i< shares.Length; i++)
+            {
+                var share = shares[i] = new Share();
+                share.n=quorum+1; // just to satisfy validations in SharedSecretGenerator
+                share.k=quorum;
+                readShare(share,quorum,i+1,true);
+            }     
+
+            var secret = SharedSecretGenerator.joinShares(shares);
+            var encryptedKey = File.ReadAllText(backupToRecover,Encoding.UTF8);
+            var keyJson = SharedSecretGenerator.decryptKey(encryptedKey,shares);
+            var key = JsonConvert.DeserializeObject<KeyGenerator.JwtRsaKey>(keyJson);
+
+            //=========================
+
+            Console.Clear();
+            displayKeyRecoveredInfo();
+            Console.ReadLine();
+
+            Console.Clear();
+            displayAzureVaultPrompt();
+            Console.ReadLine();
+            string token=null;
+            if (!testModeFlag) token = getToken();
+            Console.WriteLine($"Token:\n{token}");
+            displayVaultImportConfirm();
+            Console.ReadLine();
+            if (!testModeFlag) importKeyToVault(key,token,vaultUrl);
+            Console.WriteLine("Press [Enter] to continue");
+            Console.ReadLine();
+
+            Console.Clear();
+            displayFinishInfo();
+            Console.ReadLine();            
+        }
+
+        static void displayKeyRecoveredInfo(){
+            Console.Clear();
+            Console.WriteLine($@"
+Key was recovered and is ready to import to secure destination.
+
+Press [Enter] to proceed {testMode}
+            ");
         }
 
 
@@ -262,21 +361,76 @@ Press [Enter] when done.
             Console.ReadLine();
         }
 
-        static bool readVerifyShare(int shareIndex, string shareValue, string shareHash)
+        static void readShare(Share share, int count, int current, bool withSecretHash=false){
+            Console.Clear();
+
+            Console.WriteLine($@"
+Share {current} of {count}:
+Enter your share information. Confirm every entry with [Enter].");
+            
+            while (true){
+
+                while(true){
+                    Console.Write("Enter shareIndex (a number):");
+                    var input = Console.ReadLine();
+                    if (Int32.TryParse(input,out share.shareIndex)) 
+                        break;
+                    else 
+                        Console.WriteLine("..Bad fromat - enter decimal number");
+                }
+                
+                while(true){
+                    Console.Write("Enter shareValue (cvcvc-cvcvc...):");
+                    share.shareValue = Console.ReadLine().ToLower();
+                    if (Regex.IsMatch(share.shareValue,proquintPattern)) break;
+                    else {
+                        Console.WriteLine("Bad share value format ...");
+                    }
+                }
+                
+                while(true){
+                    Console.Write("Enter shareHash (cvcvc-cvcvc):");
+                    share.shareHash = Console.ReadLine().ToLower();
+                    if (Regex.IsMatch(share.shareHash,proquintPattern)) {
+                        break;
+                    }
+                    else {
+                        Console.WriteLine("Bad share hash format ...");
+                    }
+                }
+
+                // check hash of the share 
+                var shareHash = SharedSecretGenerator.computeShareHash(share.shareIndex,share.shareValue);
+                if (shareHash.Equals(share.shareHash)){
+                    break;
+                }
+                else {
+                    Console.WriteLine("Bad share hash - typing error ? Type all this share info again.");    
+                }
+            }
+
+            if (withSecretHash){
+                while(true){
+                    Console.Write("Enter secretHash (cvcvc-cvcvc):");
+                    share.secretHash = Console.ReadLine().ToLower();                
+                    if (Regex.IsMatch(share.secretHash,proquintPattern)) break;
+                    else {
+                        Console.WriteLine("Bad secret hash format ...");
+                    }
+                }
+            }
+        }
+
+        static bool readVerifyShare(int shareIndex, string shareValue, string shareHash, int count, int current)
         {
             if (testModeFlag || skipshareverify) return true;
-            Console.Clear();
-            Console.WriteLine("To verify your record, enter your share information. Confirm every etry with [Enter].");
-            Console.Write("Enter shareIndex (a number):");
-            var shareIndexVerify = Console.ReadLine();
-            Console.Write("Enter shareValue (cvcvc-cvcvc...):");
-            var shareValueVerify = Console.ReadLine().ToLower();
-            Console.Write("Enter shareHash (cvcvc-cvcvc):");
-            var shareHashVerify = Console.ReadLine().ToLower();
+            Share verify = new Share();
 
-            return (shareIndex == Int32.Parse(shareIndexVerify))
-                && shareValue.Equals(shareValueVerify)
-                && shareHash.Equals(shareHash);
+            readShare(verify,count,current);
+
+            return (shareIndex == verify.shareIndex)
+                && shareValue.Equals(verify.shareValue)
+                && shareHash.Equals(verify.shareHash);
         }
         public static void OpenBrowser(string url)
         {
@@ -355,7 +509,7 @@ If the browser failed to open, navigate to:
         }
 
 
-        static void displayInitialInfo(){
+        static void displayGenerateInitialInfo(){
                         Console.WriteLine($@"
 
 === Summary ===
@@ -369,10 +523,23 @@ Press [Enter] to continue.
 ");
         }
 
+        static void displayRecoverInitialInfo(){
+                        Console.WriteLine($@"
+
+=== Summary ===
+Will recover RSA key identified by '{kid}', 
+expecting {quorum} shares will be entered
+to decrypt the key backup.
+The key backup will be read from '{backupToRecover}'
+Press [Enter] to continue.
+======
+
+");
+        }
+
+
         static void displayShareHolderInvitation(int shareHoldersCount){
                         Console.WriteLine($@"
-Key generated, decryption shares generated.
-
 
 Bring {shareHoldersCount} share keepers one by one. 
 
@@ -442,11 +609,15 @@ Press [Enter] to continue {testMode}");
         static void displayHelp(){
             Console.WriteLine(@"
 
+* `-c|--command` - available commands: 
+  * `generate` - will generate new key - the default command
+  * `recover` - will recover from encrypted key backup (see --backup)
 * `-n|--count` - total number of shares
 * `-k|--quorum`	- number of shares needed to decrypt the key backup
 * `-i|--kid` - key identifier
 * `-s|--size` - RSA key size (not implemented, defaults to 2048)
 * `-o|--output` - name of output file. Defaults to `kid.backup`
+* `-b|--backup` - name of input file containing key backup. Defaults to `kid.backup`
 * `-t|--test` - test mode - skips share verifications, no key output, no key imported into vault
 * `-e|--tenant` - tenant to use for OAuth2 token request
 * `-a|--appid` - appid (client_id) to use for OAuth2 token request
@@ -456,7 +627,6 @@ Press [Enter] to continue {testMode}");
 * `-v|--vaulturl` - the target vault URL, defaults to https://lravault.vault.azure.net/
 * `-x|--skipshareverify` - skips the verification of the shares DANGEROUS for production use, share may be misstyped
 * `-h|--help` - display help
-
             ");
         }
 
