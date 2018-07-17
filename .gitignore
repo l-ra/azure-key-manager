@@ -1,3 +1,5 @@
+_to-delete/
+*.backup
 *.swp
 *.*~
 project.lock.json
