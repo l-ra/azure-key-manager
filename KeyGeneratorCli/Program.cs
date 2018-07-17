@@ -91,7 +91,7 @@ namespace KeyGeneratorCli
         static bool testModeFlag = false;
         static string testMode = "";
 
-        static string tenant = "ludekraseklogica.onmicrosoft.com";
+        static string tenant = "2f0ec186-d65b-4c79-8bd8-efd7547fc0c6";
         static string appId = "2125d061-6b53-4ba5-8536-de1f53a5d4ba";
         static string appSecret = null;
         static string redirectUrl = "http://localhost:7373";
