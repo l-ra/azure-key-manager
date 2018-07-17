@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.IO;
 using System.Web;
@@ -19,6 +20,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Microsoft.Azure.KeyVault;
+using Microsoft.IdentityModel.Clients.ActiveDirectory;
 
 
 namespace KeyGeneratorCli
@@ -90,11 +92,11 @@ namespace KeyGeneratorCli
         static string testMode = "";
 
         static string tenant = "ludekraseklogica.onmicrosoft.com";
-        static string appId = "c35c4ab0-2d8a-4e1c-8eab-3633c82c9f52";
+        static string appId = "2125d061-6b53-4ba5-8536-de1f53a5d4ba";
         static string appSecret = null;
         static string redirectUrl = "http://localhost:7373";
         static string resourceId = "https://vault.azure.net/";
-        static string vaultUrl = "https://lravault.vault.azure.net/";
+        static string vaultUrl = "https://lramastervault.vault.azure.net/";
         static bool skipshareverify = false;
         static string command = CMD_GENERATE;
         static string backupToRecover;
@@ -217,7 +219,7 @@ namespace KeyGeneratorCli
 
         static void doGenerate(){
             if ( File.Exists(output) ){
-                Console.WriteLine("Output exists. Quitting.");
+                Console.WriteLine($"Output exists ({output}). Quitting.");
                 Environment.Exit(1);
             }
 
@@ -260,7 +262,7 @@ namespace KeyGeneratorCli
             displayAzureVaultPrompt();
             Console.ReadLine();
             string token=null;
-            if (!testModeFlag) token = getToken();
+            if (!testModeFlag) token = getToken(tenant).Result.AccessToken;
             Console.WriteLine($"Token:\n{token}");
             displayVaultImportConfirm();
             Console.ReadLine();
@@ -312,7 +314,7 @@ namespace KeyGeneratorCli
             displayAzureVaultPrompt();
             Console.ReadLine();
             string token=null;
-            if (!testModeFlag) token = getToken();
+            if (!testModeFlag) token = getToken(tenant).Result.AccessToken;
             Console.WriteLine($"Token:\n{token}");
             displayVaultImportConfirm();
             Console.ReadLine();
@@ -455,7 +457,7 @@ Enter your share information. Confirm every entry with [Enter].");
             return $"https://login.microsoftonline.com/{tenant}/oauth2/authorize?client_id={appId}&response_type=code&redirect_uri={HttpUtility.UrlEncode(redirectUrl)}&response_mode=query&resource={HttpUtility.UrlEncode(resourceId)}";
         }
 
-        static string getToken()
+        static string getToken2()
         {
             var loginUrl = createLoginUrl();
             Console.WriteLine($@"
@@ -482,7 +484,7 @@ If the browser failed to open, navigate to:
             var tokenResponse = JsonConvert.DeserializeObject<TokenResponse>(response);
             return tokenResponse.access_token;
         }
-        static void importKeyToVault(JwtRsaKey key, string token, string vaultUrl){
+        static void importKeyToVaultx(JwtRsaKey key, string token, string vaultUrl){
             var importRequestUrl = $"{vaultUrl}/keys/{kid}?api-version=2016-10-01";
             var req = new HttpClient();
             req.DefaultRequestHeaders.Add("Authorization",new[]{$"Bearer {token}"});
@@ -492,7 +494,7 @@ If the browser failed to open, navigate to:
             Console.WriteLine($"Import key result {result.StatusCode} {result.ReasonPhrase}\n===\n{response}\n===\n");
         }
 
-        static void importKeyToVault2(JwtRsaKey key, string token, string vaultUrl){
+        static void importKeyToVault(JwtRsaKey key, string token, string vaultUrl){
             var client = new KeyVaultClient(new KeyVaultClient.AuthenticationCallback(async (authority, resource, scope)=>await Task.FromResult(token)));
             var keyBnd = new Microsoft.Azure.KeyVault.Models.KeyBundle();
             keyBnd.Key=new Microsoft.Azure.KeyVault.WebKey.JsonWebKey{
@@ -630,8 +632,78 @@ Press [Enter] to continue {testMode}");
             ");
         }
 
+        static async Task<AuthenticationResult> getToken(string tenant)
+        {
+            AuthenticationContext ctx = null;
+            if (tenant != null)
+                ctx = new AuthenticationContext("https://login.microsoftonline.com/" + tenant);
+            else
+            {
+                ctx = new AuthenticationContext("https://login.microsoftonline.com/common");
+                if (ctx.TokenCache.Count > 0)
+                {
+                    string homeTenant = ctx.TokenCache.ReadItems().First().TenantId;
+                    ctx = new AuthenticationContext("https://login.microsoftonline.com/" + homeTenant);
+                }
+            }
+            AuthenticationResult result = null;
+            try
+            {
+                result = await ctx.AcquireTokenSilentAsync(resourceId, appId);
+            }
+            catch (AdalSilentTokenAcquisitionException)
+            {
+                result = await GetTokenViaCode(ctx);
+            }
+            catch (AdalException exc)
+            {
+                PrintError(exc);
+            }
+            return result;
 
-    }
+        }
+
+
+
+        private static void PrintError(Exception exc)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("Something went wrong.");
+            Console.WriteLine("Message: " + exc.Message + "\n");
+        }
+
+        static async Task<AuthenticationResult> GetTokenViaCode(AuthenticationContext ctx)
+        {
+            AuthenticationResult result = null;
+            try
+            {
+                DeviceCodeResult codeResult = await ctx.AcquireDeviceCodeAsync(resourceId, appId);
+                Console.ResetColor();
+                Console.WriteLine("You need to sign in.");
+                Console.WriteLine("Message: " + codeResult.Message + "\n");
+                result = await ctx.AcquireTokenByDeviceCodeAsync(codeResult);
+            }
+            catch (Exception exc)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("Something went wrong.");
+                Console.WriteLine("Message: " + exc.Message + "\n");
+            }
+            return result;
+        }
+
+
+
+
+
+
+
+
+
+    } //main class
+
+
+
     public class ImportKeyRequest {
         public JwtRsaKey key;
     }
@@ -645,6 +717,9 @@ Press [Enter] to continue {testMode}");
         public string resource;
         public string access_token;
     }
+
+
+
 
 
 
